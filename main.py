@@ -5,7 +5,6 @@ import jwt
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
-from mangum import Mangum
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlmodel import Field, Session, SQLModel, create_engine, select
@@ -35,7 +34,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="Token")
 engine = create_engine(DATABASE_URL)
 
 app = FastAPI()
-handler = Mangum(app)
 
 # def get_session():
 #     with Session(engine) as session:
@@ -122,3 +120,4 @@ async def user_auth(first: str, last: str, username: str, password: str):
 @app.get("/test")
 async def jwtTest(current_user: Annotated[User, Depends(get_current_user)]):
     return [{"Message": "JWT Authentication Success!"}]
+
