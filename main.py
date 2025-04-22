@@ -12,8 +12,8 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 SECRET_KEY = "8ee8fa5e2bdfad14e2b01dec5775e5582d74ee2e091ef97620c0df8324c9e203"
 ALGORITHM = "HS256"
 ACCCESS_TOKEN_EXPIRE_MINUTES = 30
-# DATABASE_URL = "mysql+pymysql://admin:GamblingSucks!234@capstonedatabase.czcso2wimnbr.us-east-2.rds.amazonaws.com:3306/TestSchema"
-DATABASE_URL = "mysql+pymysql://admin:GamblingSucks!234@localhost:3306/TestSchema"
+DATABASE_URL = "mysql+pymysql://admin:GamblingSucks!234@capstonedatabase.czcso2wimnbr.us-east-2.rds.amazonaws.com:3306/TestSchema"
+# DATABASE_URL = "mysql+pymysql://admin:GamblingSucks!234@localhost:3306/TestSchema"
 
 class Token(BaseModel):
     access_token: str
