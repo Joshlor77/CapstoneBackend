@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, File, UploadFile, HTTPException, status, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
@@ -12,7 +12,8 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 SECRET_KEY = "8ee8fa5e2bdfad14e2b01dec5775e5582d74ee2e091ef97620c0df8324c9e203"
 ALGORITHM = "HS256"
 ACCCESS_TOKEN_EXPIRE_MINUTES = 30
-DATABASE_URL = "mysql+pymysql://admin:GamblingSucks!234@capstonedatabase.czcso2wimnbr.us-east-2.rds.amazonaws.com:3306/TestSchema"
+# DATABASE_URL = "mysql+pymysql://admin:GamblingSucks!234@capstonedatabase.czcso2wimnbr.us-east-2.rds.amazonaws.com:3306/TestSchema"
+DATABASE_URL = "mysql+pymysql://admin:GamblingSucks!234@localhost:3306/TestSchema"
 
 class Token(BaseModel):
     access_token: str
@@ -20,19 +21,71 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: str | None = None
+
+class CommonQueryParams:
+    def __init__(self, skip: int = 0, limit: int = 10):
+        self.skip = skip
+        self.limit = limit
     
 class User(SQLModel, table=True):
-    uID: int = Field(primary_key=True)
+    __tablename__ = "User"
+
+    user_id: int = Field(primary_key=True)
     first: str
     last: str
-    username: str
+    username: str = Field(unique=True)
     password: str
+
+class Building(SQLModel, table=True):
+    __tablename__ = "Building"
+
+    building_id: int = Field(primary_key=True)
+    name: str
+    address: str
+
+class Location(SQLModel, table=True):
+    __tablename__ = "Location"
+
+    loc_id: int = Field(primary_key=True)
+    building_id: int = Field(foreign_key="Building.building_id")
+    name: str
+
+class ItemType(SQLModel, table=True):
+    __tablename__ = "ItemType"
+
+    type_name: str = Field(primary_key=True)
+
+class ItemSearchParam(BaseModel):
+    def __init__(self, item_id: int | None = None, item_type: str | None = None, loc_id: int | None = None, serial: str | None = None, part: str | None = None):
+        self.item_id = item_id
+        self.item_type = item_type
+        self.loc_id = loc_id
+        self.serial = serial
+        self.part = part
+
+class ItemCreateForm:
+    def __init__(self, item_type: Annotated[str, Form()], loc_id: Annotated[int, Form()], serial: Annotated[str, Form()], part: Annotated[str, Form()]):
+        self.item_type = item_type
+        self.loc_id = loc_id
+        self.serial = serial
+        self.part = part
+
+class ItemBase(SQLModel):
+    item_type: str = Field(foreign_key="ItemType.type_name")
+    loc_id: int | None = Field(default=None, foreign_key="Location.loc_id")
+    serial: str
+    part: str
+    madlib: str
+    image: bytes | None = None
+
+class Item(ItemBase, table=True):
+    __tablename__ = "Item"
+    item_id: int = Field(primary_key=True)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="Token")
 
 engine = create_engine(DATABASE_URL)
-
 app = FastAPI()
 
 def get_session():
@@ -47,13 +100,14 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-def get_user(username: str, session: SessionDep):
-    statement = select(User).where(User.username==username)
-    result = session.exec(statement)
-    r = result.all()
-    if not r:
-        return None
-    return r[0]
+def get_user(username: str):
+    with Session(engine) as session:
+        statement = select(User).where(User.username==username)
+        result = session.exec(statement)
+        r = result.all()
+        if not r:
+            return None
+        return r[0]
     
 def authenticate_user(username: str, password: str):
     user = get_user(username)
@@ -76,7 +130,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Unable to validate crednetials",
+        detail="Unable to validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
@@ -107,15 +161,58 @@ async def user_auth(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]) 
     )
     return Token(access_token=access_token, token_type="bearer")
 
+@app.get("/Token/test")
+async def jwtTest(current_user: Annotated[User, Depends(get_current_user)]):
+    return [{"Message": "JWT Authentication Success!"}]
+
+
 @app.post("/user/register")
 async def user_auth(first: str, last: str, username: str, password: str, session: SessionDep):
+    if len(session.exec(select(User).where(User.username==username)).all()) != 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username already taken",
+            headers={"error": "username_taken"}
+        )
     hashedPass = pwd_context.hash(password)
     user = User(first=first, last=last, username=username, password=hashedPass)
     session.add(user)
     session.commit()
     return user
-    
-@app.get("/test")
-async def jwtTest(current_user: Annotated[User, Depends(get_current_user)]):
-    return [{"Message": "JWT Authentication Success!"}]
+
+@app.get("/itemTypes")
+async def get_itemTypes(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)]):
+    statement = select(ItemType)
+    results = session.exec(statement)
+    return results.all()
+
+#TODO This needs extra work to work with image files
+@app.post("/item")
+async def create_item(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)], item_data: Annotated[ItemCreateForm, Depends()], file: Annotated[bytes, File()]):
+    item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=file)
+    session.add(item)
+    session.commit()
+    return {}
+
+@app.get("/item")
+async def read_items(session: SessionDep, commons: Annotated[CommonQueryParams, Depends(CommonQueryParams)], current_user: Annotated[User, Depends(get_current_user)], itemQ: Annotated[ItemSearchParam | None, Depends(ItemSearchParam)]):
+    statement = select(Item)
+    if itemQ.item_id is not None:
+        statement.where(Item.id == itemQ.item_id)
+    if itemQ.serial is not None:
+        statement.where(Item.serial == itemQ.serial)
+    if itemQ.part is not None:
+        statement.where(Item.part == itemQ.part)
+    if itemQ.item_type is not None:
+        statement.where(Item.item_type == itemQ.item_type)
+    if itemQ.loc_id is not None:
+        statement.where(Item.loc_id == itemQ.loc_id)
+
+    results = session.exec(statement)
+    return results.all()[commons.skip : commons.skip + commons.limit]
+
+@app.put("/item")
+async def update_item():
+    pass
+
 
