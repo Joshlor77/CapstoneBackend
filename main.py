@@ -35,11 +35,11 @@ engine = create_engine(DATABASE_URL)
 
 app = FastAPI()
 
-# def get_session():
-#     with Session(engine) as session:
-#         yield session
+def get_session():
+    with Session(engine) as session:
+        yield session
 
-#SessionDep = Annotated[Session, Depends(get_session)]
+SessionDep = Annotated[Session, Depends(get_session)]
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -47,15 +47,14 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-def get_user(username: str):
-    with Session(engine) as session:
-        statement = select(User).where(User.username==username)
-        result = session.exec(statement)
-        r = result.all()
-        if not r:
-            return None
-        return r[0]
-        
+def get_user(username: str, session: SessionDep):
+    statement = select(User).where(User.username==username)
+    result = session.exec(statement)
+    r = result.all()
+    if not r:
+        return None
+    return r[0]
+    
 def authenticate_user(username: str, password: str):
     user = get_user(username)
     if not user:
@@ -109,13 +108,12 @@ async def user_auth(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]) 
     return Token(access_token=access_token, token_type="bearer")
 
 @app.post("/user/register")
-async def user_auth(first: str, last: str, username: str, password: str):
-    with Session(engine) as session:
-        hashedPass = pwd_context.hash(password)
-        user = User(first=first, last=last, username=username, password=hashedPass)
-        session.add(user)
-        session.commit()
-        return user
+async def user_auth(first: str, last: str, username: str, password: str, session: SessionDep):
+    hashedPass = pwd_context.hash(password)
+    user = User(first=first, last=last, username=username, password=hashedPass)
+    session.add(user)
+    session.commit()
+    return user
     
 @app.get("/test")
 async def jwtTest(current_user: Annotated[User, Depends(get_current_user)]):
