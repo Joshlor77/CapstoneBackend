@@ -69,11 +69,12 @@ class ItemSearchParam:
         self.part = part
 
 class ItemCreateForm:
-    def __init__(self, item_type: Annotated[str, Form()], loc_id: Annotated[int, Form()], serial: Annotated[str, Form()], part: Annotated[str, Form()]):
+    def __init__(self, item_type: Annotated[str, Form()], loc_id: Annotated[int, Form()], serial: Annotated[str, Form()], part: Annotated[str, Form()], madlib:  Annotated[str, Form()]):
         self.item_type = item_type
         self.loc_id = loc_id
         self.serial = serial
         self.part = part
+        self.madlib = madlib
 
 class ItemUpdate(BaseModel):
     loc_id: int
@@ -81,17 +82,27 @@ class ItemUpdate(BaseModel):
     last_updated: str
     madlib: str
 
-class ItemNoImageView(ItemUpdate, SQLModel, table=True):
-    __tablename__ = "ItemNoImage"
+class ItemNoImageView(SQLModel, table=True):
+    __tablename__ = "ItemNoImageView"
     item_id: int = Field(primary_key=True)
     item_type: str = Field(foreign_key="ItemType.type_name")
     loc_id: int | None = Field(default=None, foreign_key="Location.loc_id")
     serial: str
     part: str
+    last_user: int = Field(foreign_key="User.user_id")
+    last_updated: str
+    madlib: str
     
-class Item(ItemNoImageView, table=True):
+class Item(SQLModel, table=True):
     __tablename__ = "Item"
-
+    item_id: int = Field(primary_key=True)
+    item_type: str = Field(foreign_key="ItemType.type_name")
+    loc_id: int | None = Field(default=None, foreign_key="Location.loc_id")
+    serial: str
+    part: str
+    last_user: int = Field(foreign_key="User.user_id")
+    last_updated: str
+    madlib: str
     image: bytes | None = None
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -201,7 +212,7 @@ async def get_itemTypes(session: SessionDep, current_user: Annotated[User, Depen
 
 @app.post("/item")
 async def create_item(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)], item_data: Annotated[ItemCreateForm, Depends()], file: Annotated[bytes, File()]):
-    item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=file)
+    item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=file, last_user=current_user.user_id, last_updated=datetime.today(), madlib=item_data.madlib)
     session.add(item)
     session.commit()
     return HTTPException(
