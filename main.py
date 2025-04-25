@@ -1,13 +1,18 @@
 from datetime import datetime, timedelta, timezone
-from typing import Annotated
 
+from typing import Annotated
 import jwt
 from fastapi import Depends, FastAPI, File, UploadFile, HTTPException, status, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.responses import Response
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlmodel import Field, Session, SQLModel, create_engine, select
+
+#This removes the error message about bcrypt version
+import bcrypt
+bcrypt.__about__ = bcrypt
 
 SECRET_KEY = "8ee8fa5e2bdfad14e2b01dec5775e5582d74ee2e091ef97620c0df8324c9e203"
 ALGORITHM = "HS256"
@@ -55,7 +60,7 @@ class ItemType(SQLModel, table=True):
 
     type_name: str = Field(primary_key=True)
 
-class ItemSearchParam(BaseModel):
+class ItemSearchParam:
     def __init__(self, item_id: int | None = None, item_type: str | None = None, loc_id: int | None = None, serial: str | None = None, part: str | None = None):
         self.item_id = item_id
         self.item_type = item_type
@@ -70,17 +75,24 @@ class ItemCreateForm:
         self.serial = serial
         self.part = part
 
-class ItemBase(SQLModel):
+class ItemNoImageView(SQLModel, table=True):
+    __tablename__ = "ItemNoImage"
+    item_id: int = Field(primary_key=True)
+    item_type: str = Field(foreign_key="ItemType.type_name")
+    loc_id: int | None = Field(default=None, foreign_key="Location.loc_id")
+    serial: str
+    part: str
+    madlib: str
+
+class Item(SQLModel, table=True):
+    __tablename__ = "Item"
+    item_id: int = Field(primary_key=True)
     item_type: str = Field(foreign_key="ItemType.type_name")
     loc_id: int | None = Field(default=None, foreign_key="Location.loc_id")
     serial: str
     part: str
     madlib: str
     image: bytes | None = None
-
-class Item(ItemBase, table=True):
-    __tablename__ = "Item"
-    item_id: int = Field(primary_key=True)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="Token")
@@ -180,39 +192,53 @@ async def user_auth(first: str, last: str, username: str, password: str, session
     session.commit()
     return user
 
+@app.get("/user")
+async def read_name(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)]):
+    return {"first": current_user.first, "last": current_user.last}
+
+
 @app.get("/itemTypes")
 async def get_itemTypes(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)]):
     statement = select(ItemType)
     results = session.exec(statement)
     return results.all()
 
-#TODO This needs extra work to work with image files
 @app.post("/item")
 async def create_item(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)], item_data: Annotated[ItemCreateForm, Depends()], file: Annotated[bytes, File()]):
     item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=file)
     session.add(item)
     session.commit()
-    return {}
+    return HTTPException(
+        status_code=status.HTTP_201_CREATED,
+        detail="Item created successfully",
+        headers={"message": "Success"}
+    )
 
 @app.get("/item")
 async def read_items(session: SessionDep, commons: Annotated[CommonQueryParams, Depends(CommonQueryParams)], current_user: Annotated[User, Depends(get_current_user)], itemQ: Annotated[ItemSearchParam | None, Depends(ItemSearchParam)]):
-    statement = select(Item)
+    statement = select(ItemNoImageView)
     if itemQ.item_id is not None:
-        statement.where(Item.id == itemQ.item_id)
+        statement.where(ItemNoImageView.item_id == itemQ.item_id)
     if itemQ.serial is not None:
-        statement.where(Item.serial == itemQ.serial)
+        statement.where(ItemNoImageView.serial == itemQ.serial)
     if itemQ.part is not None:
-        statement.where(Item.part == itemQ.part)
+        statement.where(ItemNoImageView.part == itemQ.part)
     if itemQ.item_type is not None:
-        statement.where(Item.item_type == itemQ.item_type)
+        statement.where(ItemNoImageView.item_type == itemQ.item_type)
     if itemQ.loc_id is not None:
-        statement.where(Item.loc_id == itemQ.loc_id)
+        statement.where(ItemNoImageView.loc_id == itemQ.loc_id)
 
     results = session.exec(statement)
     return results.all()[commons.skip : commons.skip + commons.limit]
 
-@app.put("/item")
-async def update_item():
-    pass
+@app.get("/item/{item_id}/image")
+async def read_item_image(session: SessionDep, commons: Annotated[CommonQueryParams, Depends(CommonQueryParams)], item_id: int):
+    statement = select(Item).where(Item.item_id == item_id)
+    item = session.exec(statement)
+    return Response(content=item.one().image, media_type="image/png")
 
-
+@app.get("/locations")
+async def read_locations(session: SessionDep, commons: Annotated[CommonQueryParams, Depends(CommonQueryParams)]):
+    statement = select(Location)
+    locations = session.exec(statement).all()
+    return locations
