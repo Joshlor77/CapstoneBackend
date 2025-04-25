@@ -75,23 +75,23 @@ class ItemCreateForm:
         self.serial = serial
         self.part = part
 
-class ItemNoImageView(SQLModel, table=True):
+class ImageUpdate(BaseModel):
+    loc_id: int | None = Field(default=None, foreign_key="Location.loc_id")
+    last_user: str
+    last_updated: str
+    madlib: str
+
+class ItemNoImageView(ImageUpdate, table=True):
     __tablename__ = "ItemNoImage"
     item_id: int = Field(primary_key=True)
     item_type: str = Field(foreign_key="ItemType.type_name")
     loc_id: int | None = Field(default=None, foreign_key="Location.loc_id")
     serial: str
     part: str
-    madlib: str
-
-class Item(SQLModel, table=True):
+    
+class Item(ItemNoImageView, table=True):
     __tablename__ = "Item"
-    item_id: int = Field(primary_key=True)
-    item_type: str = Field(foreign_key="ItemType.type_name")
-    loc_id: int | None = Field(default=None, foreign_key="Location.loc_id")
-    serial: str
-    part: str
-    madlib: str
+
     image: bytes | None = None
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -116,10 +116,7 @@ def get_user(username: str):
     with Session(engine) as session:
         statement = select(User).where(User.username==username)
         result = session.exec(statement)
-        r = result.all()
-        if not r:
-            return None
-        return r[0]
+        return result.one_or_none()
     
 def authenticate_user(username: str, password: str):
     user = get_user(username)
@@ -158,6 +155,11 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         raise credentials_exception
     return user
 
+@app.get("/")
+async def root():
+    return {"Message": "Hello"}
+
+#Implement a refresh token
 @app.post("/Token")
 async def user_auth(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]) -> Token:
     user = authenticate_user(form_data.username, form_data.password)
@@ -172,11 +174,6 @@ async def user_auth(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]) 
         data = {"sub": user.username}, expires_delta=access_token_expires
     )
     return Token(access_token=access_token, token_type="bearer")
-
-@app.get("/Token/test")
-async def jwtTest(current_user: Annotated[User, Depends(get_current_user)]):
-    return [{"Message": "JWT Authentication Success!"}]
-
 
 @app.post("/user/register")
 async def user_auth(first: str, last: str, username: str, password: str, session: SessionDep):
@@ -195,7 +192,6 @@ async def user_auth(first: str, last: str, username: str, password: str, session
 @app.get("/user")
 async def read_name(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)]):
     return {"first": current_user.first, "last": current_user.last}
-
 
 @app.get("/itemTypes")
 async def get_itemTypes(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)]):
@@ -218,27 +214,38 @@ async def create_item(session: SessionDep, current_user: Annotated[User, Depends
 async def read_items(session: SessionDep, commons: Annotated[CommonQueryParams, Depends(CommonQueryParams)], current_user: Annotated[User, Depends(get_current_user)], itemQ: Annotated[ItemSearchParam | None, Depends(ItemSearchParam)]):
     statement = select(ItemNoImageView)
     if itemQ.item_id is not None:
-        statement.where(ItemNoImageView.item_id == itemQ.item_id)
+        statement = statement.where(ItemNoImageView.item_id == itemQ.item_id)
     if itemQ.serial is not None:
-        statement.where(ItemNoImageView.serial == itemQ.serial)
+        statement = statement.where(ItemNoImageView.serial == itemQ.serial)
     if itemQ.part is not None:
-        statement.where(ItemNoImageView.part == itemQ.part)
+        statement = statement.where(ItemNoImageView.part == itemQ.part)
     if itemQ.item_type is not None:
-        statement.where(ItemNoImageView.item_type == itemQ.item_type)
+        statement = statement.where(ItemNoImageView.item_type == itemQ.item_type)
     if itemQ.loc_id is not None:
-        statement.where(ItemNoImageView.loc_id == itemQ.loc_id)
-
+        statement = statement.where(ItemNoImageView.loc_id == itemQ.loc_id)
     results = session.exec(statement)
+
     return results.all()[commons.skip : commons.skip + commons.limit]
 
 @app.get("/item/{item_id}/image")
-async def read_item_image(session: SessionDep, commons: Annotated[CommonQueryParams, Depends(CommonQueryParams)], item_id: int):
+async def read_item_image(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)], item_id: int):
     statement = select(Item).where(Item.item_id == item_id)
-    item = session.exec(statement)
-    return Response(content=item.one().image, media_type="image/png")
+    result = session.exec(statement)
+    item = result.one_or_none()
+    if item is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found",
+            headers={"error": "Item not found"}
+        )
+    return Response(content=item.image, media_type="image/png")
+
+@app.patch("/item")
+async def update_item(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)]):
+    pass
 
 @app.get("/locations")
-async def read_locations(session: SessionDep, commons: Annotated[CommonQueryParams, Depends(CommonQueryParams)]):
+async def read_locations(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)]):
     statement = select(Location)
     locations = session.exec(statement).all()
     return locations
