@@ -75,13 +75,13 @@ class ItemCreateForm:
         self.serial = serial
         self.part = part
 
-class ImageUpdate(BaseModel):
-    loc_id: int | None = Field(default=None, foreign_key="Location.loc_id")
+class ItemUpdate(BaseModel):
+    loc_id: int
     last_user: str
     last_updated: str
     madlib: str
 
-class ItemNoImageView(ImageUpdate, table=True):
+class ItemNoImageView(ItemUpdate, SQLModel, table=True):
     __tablename__ = "ItemNoImage"
     item_id: int = Field(primary_key=True)
     item_type: str = Field(foreign_key="ItemType.type_name")
@@ -240,8 +240,9 @@ async def read_item_image(session: SessionDep, current_user: Annotated[User, Dep
         )
     return Response(content=item.image, media_type="image/png")
 
-@app.patch("/item")
-async def update_item(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)]):
+@app.patch("/item/move/{item_id}")
+async def move_item(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)], itemfields: ItemUpdate):
+    
     pass
 
 @app.get("/locations")
