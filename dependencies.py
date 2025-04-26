@@ -3,7 +3,7 @@ from typing import Annotated
 from sqlmodel import Session, create_engine
 from fastapi import Depends
 
-from .models import User
+from models import User
 
 # DATABASE_URL = "mysql+pymysql://admin:GamblingSucks!234@capstonedatabase.czcso2wimnbr.us-east-2.rds.amazonaws.com:3306/TestSchema"
 DATABASE_URL = "mysql+pymysql://admin:GamblingSucks!234@localhost:3306/BackendTestSchema"

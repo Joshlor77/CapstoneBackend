@@ -8,8 +8,8 @@ from sqlmodel import Session, select
 from pydantic import BaseModel
 from passlib.context import CryptContext
 
-from .dependencies import SessionDep
-from .models import User
+from dependencies import SessionDep
+from models import User
 
 #Removes error about bcrypt version
 import bcrypt
