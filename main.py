@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from typing import Annotated
+from typing import Annotated, Optional
 import jwt
 from fastapi import Depends, FastAPI, File, UploadFile, HTTPException, status, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from pydantic import BaseModel
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, create_engine, select, Relationship
 
 #This removes the error message about bcrypt version
 import bcrypt
@@ -28,8 +28,8 @@ class TokenData(BaseModel):
     username: str | None = None
 
 class CommonQueryParams:
-    def __init__(self, skip: int = 0, limit: int = 10):
-        self.skip = skip
+    def __init__(self, offset: int = 0, limit: int = 10):
+        self.offset = offset
         self.limit = limit
     
 class User(SQLModel, table=True):
@@ -40,6 +40,8 @@ class User(SQLModel, table=True):
     last: str
     username: str = Field(unique=True)
     password: str
+
+    items: list["ItemNoImageView"] = Relationship(back_populates="recent_user")
 
 class Building(SQLModel, table=True):
     __tablename__ = "Building"
@@ -92,6 +94,8 @@ class ItemNoImageView(SQLModel, table=True):
     last_user: int = Field(foreign_key="User.user_id")
     last_updated: str
     madlib: str
+
+    recent_user: Optional["User"] = Relationship(back_populates="items", sa_relationship_kwargs=dict(lazy="selectin"))
     
 class Item(SQLModel, table=True):
     __tablename__ = "Item"
@@ -234,13 +238,20 @@ async def read_items(session: SessionDep, commons: Annotated[CommonQueryParams, 
         statement = statement.where(ItemNoImageView.item_type == itemQ.item_type)
     if itemQ.loc_id is not None:
         statement = statement.where(ItemNoImageView.loc_id == itemQ.loc_id)
-    results = session.exec(statement)
+    statement = statement.offset(commons.skip).limit(commons.limit)
 
-    return results.all()[commons.skip : commons.skip + commons.limit]
+    items = session.exec(statement).all()
+
+    item_dicts = [
+        item.model_dump(exclude={"last_user"}) | {"last_user": {"first": item.recent_user.first, "last": item.recent_user.last, "user_id": item.recent_user.user_id}}
+        for item in items
+    ]
+
+    return item_dicts
 
 @app.get("/item/{item_id}/image")
 async def read_item_image(session: SessionDep, current_user: Annotated[User, Depends(get_current_user)], item_id: int):
-    statement = select(Item).where(Item.item_id == item_id)
+    statement = select(ItemNoImageView).where(Item.item_id == item_id)
     result = session.exec(statement)
     item = result.one_or_none()
     if item is None:
