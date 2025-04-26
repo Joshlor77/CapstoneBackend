@@ -109,7 +109,7 @@ async def user_register(first: str, last: str, username: str, password: str, ses
     session.commit()
     session.refresh(user)
     return HTTPException(
-        status=status.HTTP_200_OK,
+        statu_code=status.HTTP_200_OK,
         detail="Successfully Registered"
     )
 
