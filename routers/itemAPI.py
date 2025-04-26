@@ -49,7 +49,7 @@ async def search_items(session: SessionDep, commons: Annotated[CommonQueryParams
 
 @router.get("/item/image/{item_id}")
 async def get_item_image(session: SessionDep, current_user: TokenAuthDep, item_id: int):
-    statement = select(ItemNoImageView).where(Item.item_id == item_id)
+    statement = select(Item).where(Item.item_id == item_id)
     result = session.exec(statement)
     item = result.one_or_none()
     if item is None:
