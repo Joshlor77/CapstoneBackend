@@ -1,10 +1,11 @@
 from fastapi import Depends, FastAPI, HTTPException, status
 from sqlmodel import select
 
-from routers import itemAPI
-from auth import TokenAuthDep, router as authR
-from models import UserRead, Location
-from dependencies import SessionDep
+from .routers import itemAPI
+
+from .auth import TokenAuthDep, router as authR
+from .models import UserRead, Location
+from .dependencies import SessionDep
 
 app = FastAPI()
 app.include_router(itemAPI.router)
