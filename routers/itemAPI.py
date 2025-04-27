@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response, File
 from datetime import datetime
 from sqlmodel import select
 
-from models import ItemType, ItemCreateForm, Item, ItemNoImageView, ItemSearchParam, ItemUpdate, User, UserRead
+from models import ItemType, ItemCreateForm, Item, ItemNoImageView, ItemSearchParam, ItemMove, UserRead, Shipment, Location
 from dependencies import SessionDep, CommonQueryParams
 from auth import TokenAuthDep
 
@@ -60,12 +60,84 @@ async def get_item_image(session: SessionDep, current_user: TokenAuthDep, item_i
         )
     return Response(content=item.image, media_type="image/png")
 
-#TODO
 @router.patch("/item/move/{item_id}")
-async def move_item(session: SessionDep, current_user: TokenAuthDep, item_id: int, itemfields: ItemUpdate):
-    pass
+async def move_item(session: SessionDep, current_user: TokenAuthDep, item_id: int, moveFields: ItemMove):
+    statement = select(Item).where(Item.item_id == item_id)
+    result = session.exec(statement)
+    item = result.one_or_none()
+    if item is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found",
+            headers={"error": "Invalid Item"}
+        )
+    
+    statement = select(Location).where(Location.loc_id == moveFields.loc_id)
+    result = session.exec(statement)
+    location = result.one_or_none()
+    if location is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Location not found",
+            headers={"error": "Invalid Location"}
+        )
 
-#TODO
-@router.patch("/item/ship/{item_id}")
+    item.loc_id = moveFields.loc_id
+    item.madlib = moveFields.madlib
+    
+    session.add(item)
+
+    try:
+        session.commit()
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error",
+            headers={"error": "Internal Server Error"}
+        )
+    
+    return HTTPException(
+        status_code=status.HTTP_200_OK,
+        detail="Move operation successful",
+        headers={"message": "Item location updated in database"}
+    )
+
+@router.post("/item/ship/{item_id}")
 async def ship_item(session: SessionDep, current_user: TokenAuthDep, item_id: int, address: str):
-    pass
+    statement = select(Item).where(Item.item_id == item_id)
+    result = session.exec(statement)
+    item = result.one_or_none()
+    if item is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found",
+            headers={"error": "Item not found"}
+        )
+    
+    statement = select(Shipment).where(Shipment.item_id == item_id)
+    result = session.exec(statement)
+    shipment = result.one_or_none()
+    if item is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Item is already shipped",
+            headers={"error": "Item already shipped"}
+        )
+
+    date = datetime.now().strftime("%Y-%m-%d")
+    shipment = Shipment(item_id=item_id, created_date=date, address=address)
+
+    session.add(shipment)
+    try:
+        session.commit()
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error",
+            headers={"error": "Internal Server Error"}
+        )
+
+    session.refresh(shipment)
+    return shipment

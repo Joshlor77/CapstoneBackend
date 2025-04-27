@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Relationship, Field
 from pydantic import BaseModel
-from typing import Annotated
+from typing import Annotated, Optional
 from fastapi import Form
 
 class UserRead(SQLModel):
@@ -51,10 +51,8 @@ class ItemCreateForm:
         self.part = part
         self.madlib = madlib
 
-class ItemUpdate(BaseModel):
+class ItemMove(BaseModel):
     loc_id: int
-    last_user: str
-    last_updated: str
     madlib: str
 
 class ItemNoImageView(SQLModel, table=True):
@@ -69,7 +67,7 @@ class ItemNoImageView(SQLModel, table=True):
     madlib: str
 
     recent_user: User | None = Relationship(back_populates="items", sa_relationship_kwargs=dict(lazy="selectin"))
-    
+
 class Item(SQLModel, table=True):
     __tablename__ = "Item"
     item_id: int = Field(primary_key=True)
@@ -81,3 +79,17 @@ class Item(SQLModel, table=True):
     last_updated: str
     madlib: str
     image: bytes | None = None
+
+    shipment: Optional["Shipment"] = Relationship(back_populates="item")
+
+
+class Shipment(SQLModel, table=True):
+    __tablename__ = "Shipment"
+    shipment_id: int = Field(primary_key=True)
+    item_id: int = Field(foreign_key="Item.item_id")
+    ship_date: str | None = None
+    deliver_date: str | None = None
+    created_date: str
+    address: str
+
+    item: Optional[Item] = Relationship(back_populates="shipment")
