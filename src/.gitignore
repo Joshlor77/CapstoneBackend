@@ -1,0 +1,4 @@
+.vscode/*
+*.bat
+__pycache__/*
+TestingFolder/*
