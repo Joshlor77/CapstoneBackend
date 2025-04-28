@@ -70,7 +70,7 @@ async def intake_item(session: SessionDep, current_user: TokenAuthDep, item_data
             detail=f"Unaccepted file extension {'.' + file.content_type.split('/')[1]}. Only accepts .png, .jpeg, and .webp",
             headers={"error": "Unaccepted file extension"}
         )
-    
+
     try:
         image = PILimage.open(file.file)
     except:
@@ -96,10 +96,11 @@ async def intake_item(session: SessionDep, current_user: TokenAuthDep, item_data
             detail=f"File is not a valid {'.' + file.content_type.split('/')[1]} file. It's actually a {'.' + mime.split('/')[1]}",
             headers={"error": "Unaccepted image type"}
         )
+    
+    file.file.seek(0)
+    data = await file.read(file.size)
+    item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=data, last_user=current_user.user_id, last_updated=datetime.today().strftime("%Y-%m-%d %H:%M:%S"), madlib=item_data.madlib)
     image.close()
-
-    imageData = await file.read(file.size)
-    item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=imageData, last_user=current_user.user_id, last_updated=datetime.today().strftime("%Y-%m-%d %H:%M:%S"), madlib=item_data.madlib)
     session.add(item)
     try:
         session.commit()
