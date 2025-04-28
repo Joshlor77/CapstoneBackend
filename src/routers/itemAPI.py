@@ -1,5 +1,5 @@
 from typing import Annotated
-
+from PIL import Image as PILimage
 from fastapi import APIRouter, Depends, HTTPException, status, Response, UploadFile
 from datetime import datetime
 from sqlmodel import select, Session
@@ -9,6 +9,8 @@ from ..dependencies import SessionDep, CommonQueryParams
 from ..auth import TokenAuthDep
 
 router = APIRouter(tags=["Item"])
+
+acceptedMIME = ["image/jpeg", "image/png", "image/webp"]
 
 #Checks if an ItemType with a particular primary key exists. Returns it if it does, otherwise throw exception.
 def validateItemType(session: Session, type_name: str) -> ItemType:
@@ -59,8 +61,43 @@ async def intake_item(session: SessionDep, current_user: TokenAuthDep, item_data
             detail="File larger than 16Mb, reduce file size",
             headers={"error": "File too large"}
         )
-    image = await file.read(file.size)
-    item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=image, last_user=current_user.user_id, last_updated=datetime.today().strftime("%Y-%m-%d %H:%M:%S"), madlib=item_data.madlib)
+    
+    if file.content_type not in acceptedMIME:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unaccepted file extension {'.' + file.content_type.split('/')[1]}. Only accepts .png, .jpeg, and .webp",
+            headers={"error": "Unaccepted file extension"}
+        )
+    
+    try:
+        image = PILimage.open(file.file)
+    except:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File not an image",
+            headers={"error": "File not an image"}
+        )
+    
+    try:
+        image.verify()
+    except:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to verify file. Check file integrity.",
+            headers={"error": "Unable to verify file. Check file integrity"}
+        )
+    
+    mime = image.get_format_mimetype()
+    if mime not in acceptedMIME:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"File is not a valid {'.' + file.content_type.split('/')[1]} file. It's actually a {'.' + mime.split('/')[1]}",
+            headers={"error": "Unaccepted image type"}
+        )
+
+
+    imageData = await file.read(file.size)
+    item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=imageData, last_user=current_user.user_id, last_updated=datetime.today().strftime("%Y-%m-%d %H:%M:%S"), madlib=item_data.madlib)
     session.add(item)
     try:
         session.commit()
