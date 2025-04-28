@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status, Response, File
+from fastapi import APIRouter, Depends, HTTPException, status, Response, UploadFile
 from datetime import datetime
 from sqlmodel import select, Session
 
@@ -16,7 +16,7 @@ def validateItemType(session: Session, type_name: str) -> ItemType:
     if itemType is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Item Type not found",
+            detail="Invalid Item Type, please use a valid item type",
             headers={"error": "Invalid item type"}
         )
     return itemType
@@ -27,7 +27,7 @@ def validateLocation(session: Session, loc_id: int) -> Location:
     if session.exec(select(Location).where(Location.loc_id == loc_id)).one_or_none() is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Location not found",
+            detail="Location id not found, please use a valid location",
             headers={"error": "Invalid Location id"}
         )
     return location
@@ -50,11 +50,11 @@ async def get_itemTypes(session: SessionDep, current_user: TokenAuthDep):
     return results.all()
 
 @router.post("/item")
-async def intake_item(session: SessionDep, current_user: TokenAuthDep, item_data: Annotated[ItemCreateForm, Depends()], file: Annotated[bytes, File()]):
+async def intake_item(session: SessionDep, current_user: TokenAuthDep, item_data: Annotated[ItemCreateForm, Depends()], file: UploadFile):
     validateItemType(session, item_data.item_type)
     validateLocation(session, item_data.loc_id)
-
-    item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=file, last_user=current_user.user_id, last_updated=datetime.today().strftime("%Y-%m-%d %H:%M:%S"), madlib=item_data.madlib)
+    image = await file.read(file.size())
+    item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=image, last_user=current_user.user_id, last_updated=datetime.today().strftime("%Y-%m-%d %H:%M:%S"), madlib=item_data.madlib)
     session.add(item)
     try:
         session.commit()
@@ -82,7 +82,15 @@ async def search_items(session: SessionDep, commons: Annotated[CommonQueryParams
         statement = statement.where(ItemNoImageView.item_type == itemQ.item_type)
     if itemQ.loc_id is not None:
         statement = statement.where(ItemNoImageView.loc_id == itemQ.loc_id)
-    statement = statement.offset(commons.skip).limit(commons.limit)
+
+    if commons.skip < 0:
+        statement = statement.offset(0)
+    else:
+        statement = statement.offset(commons.skip)
+    if commons.limit < 0:
+        statement = statement.limit(0)
+    else:
+        statement = statement.limit(commons.limit)
 
     items = session.exec(statement).all()
     item_dicts = [
