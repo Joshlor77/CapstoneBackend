@@ -53,6 +53,12 @@ async def get_itemTypes(session: SessionDep, current_user: TokenAuthDep):
 async def intake_item(session: SessionDep, current_user: TokenAuthDep, item_data: Annotated[ItemCreateForm, Depends()], file: UploadFile):
     validateItemType(session, item_data.item_type)
     validateLocation(session, item_data.loc_id)
+    if file.size > 16777215:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File larger than 16Mb, reduce file size",
+            headers={"error": "File too large"}
+        )
     image = await file.read(file.size)
     item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=image, last_user=current_user.user_id, last_updated=datetime.today().strftime("%Y-%m-%d %H:%M:%S"), madlib=item_data.madlib)
     session.add(item)
