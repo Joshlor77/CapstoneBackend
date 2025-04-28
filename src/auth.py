@@ -110,7 +110,8 @@ async def user_register(first: str, last: str, username: str, password: str, ses
     session.refresh(user)
     return HTTPException(
         status_code=status.HTTP_200_OK,
-        detail="Successfully Registered"
+        detail="Successfully Registered",
+        headers={"message": "Successful registration"}
     )
 
 TokenAuthDep = Annotated[User, Depends(get_current_user)]

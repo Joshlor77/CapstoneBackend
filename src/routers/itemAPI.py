@@ -10,7 +10,7 @@ from ..auth import TokenAuthDep
 
 router = APIRouter(tags=["Item"])
 
-#Checks if an ItemType with a particular primary key exists. Returns it if it does.
+#Checks if an ItemType with a particular primary key exists. Returns it if it does, otherwise throw exception.
 def validateItemType(session: Session, type_name: str) -> ItemType:
     itemType = session.exec(select(ItemType).where(ItemType.type_name == type_name)).one_or_none()
     if itemType is None:
@@ -21,7 +21,7 @@ def validateItemType(session: Session, type_name: str) -> ItemType:
         )
     return itemType
 
-#Checks if a Location with a particular primary key exists. Returns it if it does.
+#Checks if a Location with a particular primary key exists. Returns it if it does, otherwise throw exception.
 def validateLocation(session: Session, loc_id: int) -> Location:
     location = session.exec(select(Location.loc_id).where(Location.loc_id == loc_id)).one_or_none()
     if session.exec(select(Location).where(Location.loc_id == loc_id)).one_or_none() is None:
@@ -32,7 +32,7 @@ def validateLocation(session: Session, loc_id: int) -> Location:
         )
     return location
 
-#Checks if an Item with a particular primary key exists. Returns it if it does.
+#Checks if an Item with a particular primary key exists. Returns it if it does, otherwise throw exception.
 def validateItem(session: Session, item_id: int) -> Item:
     item = session.exec(select(Item).where(Item.item_id == item_id)).one_or_none()
     if item is None:
