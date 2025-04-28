@@ -1,13 +1,12 @@
 from typing import Annotated
+from dotenv import load_dotenv
+import os
 
 from sqlmodel import Session, create_engine
 from fastapi import Depends
 
-from .models import User
-
-# DATABASE_URL = "mysql+pymysql://admin:GamblingSucks!234@capstonedatabase.czcso2wimnbr.us-east-2.rds.amazonaws.com:3306/BackendTestSchema"
-DATABASE_URL = "mysql+pymysql://admin:GamblingSucks!234@localhost:3306/BackendTestSchema"
-
+load_dotenv()
+DATABASE_URL = os.getenv('DATABASE_URL')
 engine = create_engine(DATABASE_URL)
 
 def get_session():

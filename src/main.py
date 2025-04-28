@@ -8,6 +8,7 @@ from .models import UserRead, Location
 from .dependencies import SessionDep
 
 app = FastAPI()
+
 app.include_router(itemAPI.router)
 app.include_router(authR)
 
