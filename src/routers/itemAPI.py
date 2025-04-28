@@ -1,5 +1,7 @@
 from typing import Annotated
 from PIL import Image as PILimage
+from io import BytesIO
+
 from fastapi import APIRouter, Depends, HTTPException, status, Response, UploadFile
 from datetime import datetime
 from sqlmodel import select, Session
@@ -94,7 +96,7 @@ async def intake_item(session: SessionDep, current_user: TokenAuthDep, item_data
             detail=f"File is not a valid {'.' + file.content_type.split('/')[1]} file. It's actually a {'.' + mime.split('/')[1]}",
             headers={"error": "Unaccepted image type"}
         )
-
+    image.close()
 
     imageData = await file.read(file.size)
     item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=imageData, last_user=current_user.user_id, last_updated=datetime.today().strftime("%Y-%m-%d %H:%M:%S"), madlib=item_data.madlib)
@@ -145,7 +147,10 @@ async def search_items(session: SessionDep, commons: Annotated[CommonQueryParams
 @router.get("/item/image/{item_id}")
 async def get_item_image(session: SessionDep, current_user: TokenAuthDep, item_id: int):
     item = validateItem(session, item_id)
-    return Response(content=item.image, media_type="image/png")
+    pimage = PILimage.open(BytesIO(item.image))
+    mime = pimage.get_format_mimetype()
+    pimage.close()
+    return Response(content=item.image, media_type=mime, headers={"Content-Type": mime})
 
 @router.patch("/item/move/{item_id}")
 async def move_item(session: SessionDep, current_user: TokenAuthDep, item_id: int, moveFields: ItemMove):
