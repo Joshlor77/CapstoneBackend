@@ -64,43 +64,44 @@ async def intake_item(session: SessionDep, current_user: TokenAuthDep, item_data
             headers={"error": "File too large"}
         )
     
-    if file.content_type not in acceptedMIME:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unaccepted file extension {'.' + file.content_type.split('/')[1]}. Only accepts .png, .jpeg, and .webp",
-            headers={"error": "Unaccepted file extension"}
-        )
+    ## Needs some work to work with .octet-stream
+    # if file.content_type not in acceptedMIME:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail=f"Unaccepted file extension {'.' + file.content_type.split('/')[1]}. Only accepts .png, .jpeg, and .webp",
+    #         headers={"error": "Unaccepted file extension"}
+    #     )
 
-    try:
-        image = PILimage.open(file.file)
-    except:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File not an image",
-            headers={"error": "File not an image"}
-        )
+    # try:
+    #     image = PILimage.open(file.file)
+    # except:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="File not an image",
+    #         headers={"error": "File not an image"}
+    #     )
     
-    try:
-        image.verify()
-    except:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unable to verify file. Check file integrity.",
-            headers={"error": "Unable to verify file. Check file integrity"}
-        )
+    # try:
+    #     image.verify()
+    # except:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="Unable to verify file. Check file integrity.",
+    #         headers={"error": "Unable to verify file. Check file integrity"}
+    #     )
     
-    mime = image.get_format_mimetype()
-    if mime not in acceptedMIME:
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"File is not a valid {'.' + file.content_type.split('/')[1]} file. It's actually a {'.' + mime.split('/')[1]}",
-            headers={"error": "Unaccepted image type"}
-        )
+    # mime = image.get_format_mimetype()
+    # if mime not in acceptedMIME:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+    #         detail=f"File is not a valid {'.' + file.content_type.split('/')[1]} file. It's actually a {'.' + mime.split('/')[1]}",
+    #         headers={"error": "Unaccepted image type"}
+    #     )
     
-    file.file.seek(0)
+    #file.file.seek(0)
     data = await file.read(file.size)
     item = Item(serial=item_data.serial, part=item_data.part, loc_id=item_data.loc_id, item_type=item_data.item_type, image=data, last_user=current_user.user_id, last_updated=datetime.today().strftime("%Y-%m-%d %H:%M:%S"), madlib=item_data.madlib)
-    image.close()
+    #image.close()
     session.add(item)
     try:
         session.commit()
