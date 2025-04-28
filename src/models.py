@@ -3,6 +3,14 @@ from pydantic import BaseModel
 from typing import Annotated, Optional
 from fastapi import Form
 
+#There's some extra inheritance that can be done with the classes, but this probably makes the models more confusing to use.
+
+class UserRegister(BaseModel):
+    first: str
+    last: str
+    username: str
+    password: str
+
 class UserRead(SQLModel):
     user_id: int = Field(primary_key=True)
     last: str

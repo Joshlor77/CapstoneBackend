@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from passlib.context import CryptContext
 
 from .dependencies import SessionDep
-from .models import User
+from .models import User, UserRegister
 
 #Removes error about bcrypt version
 import bcrypt
@@ -96,15 +96,15 @@ async def user_auth(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], 
     return Token(access_token=access_token, token_type="bearer")
 
 @router.post("/register")
-async def user_register(first: str, last: str, username: str, password: str, session: SessionDep):
-    if len(session.exec(select(User).where(User.username==username)).all()) != 0:
+async def user_register(session: SessionDep, data: UserRegister):
+    if len(session.exec(select(User).where(User.username==data.username)).all()) != 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username already taken",
             headers={"error": "username_taken"}
         )
-    hashedPass = pwd_context.hash(password)
-    user = User(first=first, last=last, username=username, password=hashedPass)
+    hashedPass = pwd_context.hash(data.password)
+    user = User(first=data.first, last=data.last, username=data.username, password=hashedPass)
     session.add(user)
     session.commit()
     session.refresh(user)
